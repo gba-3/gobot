@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -13,6 +14,7 @@ import (
 type slackbot struct {
 	cli        *slack.Client
 	socketMode *socketmode.Client
+	userID     string
 }
 
 func NewSlackBot(slackBotToken string, slackAppToken string) *slackbot {
@@ -32,29 +34,51 @@ func NewSlackBot(slackBotToken string, slackAppToken string) *slackbot {
 	if err != nil {
 		return nil
 	}
-	fmt.Println("authTest User: ", at.User, "authTest UserID", at.UserID)
+	userID := at.UserID
 	return &slackbot{
 		cli,
 		socketMode,
+		userID,
 	}
+}
+
+func (sb *slackbot) CreateObject(objText string) slack.MsgOption {
+	text := slack.NewTextBlockObject(slack.MarkdownType, objText, false, false)
+	textSection := slack.NewSectionBlock(text, nil, nil)
+
+	btnText := slack.NewTextBlockObject(slack.PlainTextType, "YES", false, false)
+	btn := slack.NewButtonBlockElement("", "test", btnText)
+	btn.WithStyle(slack.StylePrimary)
+	actionBlock := slack.NewActionBlock("confirm-development", btn)
+
+	blocks := slack.MsgOptionBlocks(textSection, actionBlock)
+	return blocks
 }
 
 func (sb *slackbot) Listen() {
 	for ev := range sb.socketMode.Events {
+		log.Println("ev.Data: ", ev.Data)
 		payload, _ := ev.Data.(slackevents.EventsAPIEvent)
 		switch payload.Type {
 		case slackevents.CallbackEvent:
 			event := payload.InnerEvent.Data.(*slackevents.MessageEvent)
+			if strings.Contains(event.Text, "Hello") {
+				msgOption := sb.CreateObject("Hello, World")
+				sb.cli.PostMessage(event.Channel, msgOption)
+			}
+			if sb.userID == event.User || !strings.Contains(event.Text, "こんにちは") {
+				return
+			}
 			sb.cli.PostMessage(
 				event.Channel,
 				slack.MsgOptionText(
-					fmt.Sprintf(":wave: こんにちは <@%v> さん！", event.User),
+					fmt.Sprintf(":wave: <@%v> さん！", event.User),
 					false,
 				),
 			)
 
 		default:
-			log.Println("default")
+			sb.socketMode.Debugf("Skipped: %v", ev.Type)
 		}
 	}
 }
