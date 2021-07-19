@@ -1,0 +1,11 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Go slack bot
+Resources:
+  TubeApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://gobot-application/c0eb7bd49478398ac91a1f7975c23ec7
+      Handler: gobot
+      Runtime: go1.x
+      Tracing: Active
