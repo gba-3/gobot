@@ -14,7 +14,7 @@ import (
 type slackbot struct {
 	cli        *slack.Client
 	socketMode *socketmode.Client
-	userID     string
+	// userID     string
 }
 
 func NewSlackBot(slackBotToken string, slackAppToken string) *slackbot {
@@ -30,15 +30,15 @@ func NewSlackBot(slackBotToken string, slackAppToken string) *slackbot {
 		socketmode.OptionLog(log.New(os.Stdout, "sm: ", log.Lshortfile|log.LstdFlags)),
 	)
 
-	at, err := cli.AuthTest()
-	if err != nil {
-		return nil
-	}
-	userID := at.UserID
+	// at, err := cli.AuthTest()
+	// if err != nil {
+	// 	return nil
+	// }
+	// userID := at.UserID
 	return &slackbot{
 		cli,
 		socketMode,
-		userID,
+		// userID,
 	}
 }
 
@@ -57,28 +57,39 @@ func (sb *slackbot) CreateObject(objText string) slack.MsgOption {
 
 func (sb *slackbot) Listen() {
 	for ev := range sb.socketMode.Events {
-		log.Println("ev.Data: ", ev.Data)
-		payload, _ := ev.Data.(slackevents.EventsAPIEvent)
-		switch payload.Type {
-		case slackevents.CallbackEvent:
-			event := payload.InnerEvent.Data.(*slackevents.MessageEvent)
-			if strings.Contains(event.Text, "Hello") {
-				msgOption := sb.CreateObject("Hello, World")
-				sb.cli.PostMessage(event.Channel, msgOption)
-			}
-			if sb.userID == event.User || !strings.Contains(event.Text, "こんにちは") {
-				return
-			}
-			sb.cli.PostMessage(
-				event.Channel,
-				slack.MsgOptionText(
-					fmt.Sprintf(":wave: <@%v> さん！", event.User),
-					false,
-				),
-			)
+		switch ev.Type {
+		case socketmode.EventTypeConnecting:
+			fmt.Println("Connecting to Slack with Socket Mode...")
+		case socketmode.EventTypeConnectionError:
+			fmt.Println("Connection failed. Retrying later...")
+		case socketmode.EventTypeConnected:
+			fmt.Println("Connected to Slack with Socket Mode.")
+		case socketmode.EventTypeEventsAPI:
+			sb.socketMode.Ack(*ev.Request)
+			payload, _ := ev.Data.(slackevents.EventsAPIEvent)
+			switch payload.Type {
+			case slackevents.CallbackEvent:
+				event := payload.InnerEvent.Data.(*slackevents.MessageEvent)
+				if strings.Contains(event.Text, "Hello") {
+					msgOption := sb.CreateObject("Hello, World")
+					sb.cli.PostMessage(event.Channel, msgOption)
+				}
+				if !strings.Contains(event.Text, "こんにちは") {
+					return
+				}
+				sb.cli.PostMessage(
+					event.Channel,
+					slack.MsgOptionText(
+						fmt.Sprintf(":wave: <@%v> さん！", event.User),
+						false,
+					),
+				)
 
+			default:
+				sb.socketMode.Debugf("Skipped: %v", ev.Type)
+			}
 		default:
-			sb.socketMode.Debugf("Skipped: %v", ev.Type)
+			sb.socketMode.Debugf("TypeError")
 		}
 	}
 }
