@@ -6,8 +6,6 @@ services:
             dockerfile: Dockerfile
         container_name: gobot
         tty: true
-        volumes:
-            - ./:/app
         environment:
             - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
             - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
